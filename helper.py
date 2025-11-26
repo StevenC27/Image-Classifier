@@ -75,14 +75,25 @@ def one_hot_decode(y_onehot, class_to_index):
     indices = np.argmax(y_onehot, axis=1)
     return np.array([index_to_class[i] for i in indices])
     
-def plot_loss(train_losses, val_losses):
+def plot_loss_accuracy(train_losses, val_losses, train_accuracy, val_accuracy):
+    plt.figure()
+    plt.subplot(1, 2, 1)    
     plt.plot(train_losses, label="Train Loss")
     plt.plot(val_losses, label="Validation Loss")
     plt.xlabel("Epochs")
     plt.ylabel("Loss")
     plt.legend()
+    
+    plt.subplot(1, 2, 2)
+    plt.plot(train_accuracy, label="Train Accuracy")
+    plt.plot(val_accuracy, label="Validation Accuracy")
+    plt.xlabel("Epochs")
+    plt.ylabel("Accurracy")
+    plt.legend()
+    
 
-def plot_cm(confustion_matrix, class_labels, y_true, y_pred):
+def plot_cm(class_labels, y_true, y_pred):
     cm = confusion_matrix(y_true, y_pred)
     cm_plot = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=class_labels)
     cm_plot.plot()
+    
