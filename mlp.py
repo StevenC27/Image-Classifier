@@ -6,10 +6,10 @@ from sklearn.metrics import accuracy_score
 
 
 class MLP:
-    def __init__(self, input_size, output_size, hidden1, hidden2, hidden3, max_iter, l_rate=0.01):
+    def __init__(self, input_size, output_size, hidden1, hidden2, hidden3, epochs, l_rate=0.01):
         self.lr = l_rate
         self.input_size = input_size
-        self.max_iter = max_iter
+        self.epochs = epochs
         
         self.n = 0
         
@@ -80,15 +80,25 @@ class MLP:
         self.biases['b1'] -= self.lr * db1
         
     
-    def fit(self, X, y, batch_size=50):
+    def fit(self, X, y, X_val=None, y_val=None, batch_size=50):
         X = X.astype(np.float32)
         y_onehot, self.one_hot_mapping = helper.one_hot_encode(y)
+
+        if X_val is not None and y_val is not None:
+            X_val = X_val.astype(np.float32)
+            y_val_onehot, y_val_map = helper.one_hot_encode(y_val)
+
         m = X.shape[0]
-        for epoch in range(self.max_iter):
+        self.train_losses = []
+        self.val_losses = []
+
+        for epoch in range(self.epochs):
             print(self.n)
             indices = np.random.permutation(m)
             X_shuffled, y_shuffled = X[indices], y_onehot[indices]
             
+            batch_losses = []
+
             for start in range(0, m, batch_size):
                 end = start + batch_size
                 X_batch = X_shuffled[start:end]
@@ -96,9 +106,18 @@ class MLP:
                 
                 y_pred = self.f_propagation(X_batch)
                 loss = cross_entropy(y_batch, y_pred)
+                batch_losses.append(loss)
+
                 self.b_propagation(X_batch, y_batch)
-            
-            print(f"iter {epoch}: loss = {loss:.4f}")
+
+            mean_train_loss = np.mean(batch_losses)
+            self.train_losses.append(mean_train_loss)
+
+            if X_val is not None:
+                y_val_pred = self.f_propagation(X_val)
+                val_loss = cross_entropy(y_val_onehot, y_val_pred)
+                self.val_losses.append(val_loss)
+                print(f"iter {epoch}: loss = {loss:.4f}, val_loss = {val_loss:.4f}")
         
             
     def predict(self, X):

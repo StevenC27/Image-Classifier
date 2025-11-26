@@ -1,5 +1,7 @@
 import pickle
 import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.metrics import accuracy_score, confusion_matrix, ConfusionMatrixDisplay
 
 def unpickle_train():
     X = np.empty((0, 3072), dtype=np.uint8)
@@ -11,6 +13,7 @@ def unpickle_train():
             dict = pickle.load(fo, encoding='bytes')
             
         y_i = np.array(dict[b'labels'])
+        print(y_i)
         X_i = np.array(dict[b'data'])
         
         class_indices = np.where((y_i == 2) | (y_i == 3) | (y_i == 4) | (y_i == 5) | (y_i == 7))
@@ -72,3 +75,14 @@ def one_hot_decode(y_onehot, class_to_index):
     indices = np.argmax(y_onehot, axis=1)
     return np.array([index_to_class[i] for i in indices])
     
+def plot_loss(train_losses, val_losses):
+    plt.plot(train_losses, label="Train Loss")
+    plt.plot(val_losses, label="Validation Loss")
+    plt.xlabel("Epochs")
+    plt.ylabel("Loss")
+    plt.legend()
+
+def plot_cm(confustion_matrix, class_labels, y_true, y_pred):
+    cm = confusion_matrix(y_true, y_pred)
+    cm_plot = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=class_labels)
+    cm_plot.plot()
