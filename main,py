@@ -18,12 +18,10 @@ def mlp(X_train, y_train, X_test, y_test,
     helper.plot_cm(class_labels, y_test, y_pred)
     print(accuracy_score(y_test, y_pred))
 
-
+# 768, 512, 384, 256, 192, 128, 96, 64, 48, 32, 
 def dnn(X_train, y_train, X_test, y_test,
-        layers=[3072, 1024, 256, 64, 5], epochs=50,
-        batch_size=256, grad_clipping=True):
-    
-    model = DNN(layers=layers, epochs=epochs, grad_clipping=grad_clipping)
+        layers=[3072, 768, 512, 384, 256, 192, 128, 96, 64, 48, 32, 5], epochs=50, batch_size=256, grad_clipping=True, dropout_rate=0.0):
+    model = DNN(layers=layers, epochs=epochs, grad_clipping=grad_clipping, dropout_rate=dropout_rate)
     model.fit(X_train, y_train, X_test, y_test, batch_size=batch_size)
     y_pred = model.predict(X_test)
     helper.plot_loss_accuracy(model.train_losses, model.val_losses, model.train_accuracies, model.val_accuracies)
@@ -36,5 +34,5 @@ X_train, y_train, X_test, y_test = helper.get_test_train()
 #mlp(X_train, y_train, X_test, y_test, epochs=20, batch_size=256, grad_clipping=False)
 #mlp(X_train, y_train, X_test, y_test, epochs=20, batch_size=256, grad_clipping=True)
 
-dnn(X_train, y_train, X_test, y_test, epochs=20, batch_size=256)
+dnn(X_train, y_train, X_test, y_test, epochs=50, batch_size=256, grad_clipping=True, dropout_rate=0.1)
 plt.show()

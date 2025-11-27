@@ -45,15 +45,6 @@ def unpickle(file):
     return X, y
 
 def get_test_train():
-    """
-    X_train = []
-    y_train = []
-    for i in range(1, 6):
-        file = f"./cifar-10-batches-py/data_batch_{i}"
-        X_train_i, y_train_i = unpickle(file)
-        X_train.append(X_train_i)
-        y_train.append(y_train_i)
-        """
     X_train, y_train = unpickle_train()
         
     X_test, y_test = unpickle("./cifar-10-batches-py/test_batch")

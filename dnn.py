@@ -5,10 +5,12 @@ import helper
 from sklearn.metrics import accuracy_score
 
 class DNN:
-    def __init__(self, epochs, layers=[3072, 512, 256, 128, 64, 5], lr=0.005, grad_clipping=True):
+    def __init__(self, epochs, layers=[3072, 512, 256, 128, 64, 5], lr=0.02, grad_clipping=True, dropout_rate=0.0):
         self.lr = lr
         self.epochs = epochs
         self.n_layers = len(layers)-1
+        self.grad_clipping = grad_clipping
+        self.dropout_rate = dropout_rate
         
         self.weights = []
         self.biases = []
@@ -23,19 +25,30 @@ class DNN:
         var = np.sqrt(2/(input_size))
         return np.random.normal(scale=var, size=(input_size, output_size))
         
-    def f_propagation(self, X):
+    def f_propagation(self, X, training=True):
         self.l_combinations = []
         self.activations = [X]
+        self.dropout_masks = []
         for i in range(self.n_layers-1):
             lc = np.dot(self.activations[i], self.weights[i]) + self.biases[i]
             a = activation.leaky_relu(lc)
             self.l_combinations.append(lc)
+
+            if training and self.dropout_rate > 0.0:
+                mask = (np.random.rand(*a.shape) > self.dropout_rate).astype(np.float32)
+                a *= mask
+                a /= (1 - self.dropout_rate)
+                self.dropout_masks.append(mask)
+            else:
+                self.dropout_masks.append(np.ones_like)
+
             self.activations.append(a)
-            
+
         lc = np.dot(self.activations[-1], self.weights[-1]) + self.biases[-1]
         a = activation.softmax(lc)
         self.l_combinations.append(lc)
         self.activations.append(a)
+        self.dropout_masks.append(np.ones_like(a))
         return a
     
     def b_propagation(self, X, y):
@@ -50,21 +63,28 @@ class DNN:
             dbs[i] = np.sum(dlc, axis=0, keepdims=True) / m
             if i != 0:
                 da_prev = np.dot(dlc, self.weights[i].T)
+
+                if self.dropout_rate > 0.0:
+                    da_prev *= self.dropout_masks[i-1]
+                    da_prev /= (1 - self.dropout_rate)
+
                 dlc_prev = da_prev * activation.leaky_relu_derivative(self.l_combinations[i-1])
                 dlc = dlc_prev
                 
-        dws = self.clip_grads(dws)
+        if self.grad_clipping:
+            dws = self.clip_grads(dws)
+
         for i in range(self.n_layers):
             self.weights[i] -= self.lr * dws[i]
             self.biases[i] -= self.lr * dbs[i]
     
     def fit(self, X_train, y_train, X_val=None, y_val=None, batch_size=50):
         X_train = X_train.astype(np.float32)
-        y_onehot, self.one_hot_mapping = helper.one_hot_encode(y_train)
+        y_train_onehot, self.onehot_mapping = helper.one_hot_encode(y_train)
         
         if X_val is not None and y_val is not None:
             X_val = X_val.astype(np.float32)
-            y_val_onehot, y_val_map = helper.one_hot_encode(y_val)
+            y_val_onehot, _ = helper.one_hot_encode(y_val)
             
         m = X_train.shape[0]
         self.train_losses = []
@@ -74,7 +94,7 @@ class DNN:
         
         for epoch in range(self.epochs):
             indices = np.random.permutation(m)
-            X_shuffled, y_shuffled = X_train[indices], y_onehot[indices]
+            X_shuffled, y_shuffled = X_train[indices], y_train_onehot[indices]
             
             batch_losses = []
             
@@ -94,13 +114,13 @@ class DNN:
             self.train_losses.append(mean_train_loss)
             
             y_train_pred = self.f_propagation(X_train)
-            y_train_labels = helper.one_hot_decode(y_train_pred, self.one_hot_mapping)
+            y_train_labels = helper.one_hot_decode(y_train_pred, self.onehot_mapping)
             train_accuracy = accuracy_score(y_train, y_train_labels)
             self.train_accuracies.append(train_accuracy)
             
             if X_val is not None:
                 y_val_pred = self.f_propagation(X_val)
-                y_val_labels = helper.one_hot_decode(y_val_pred, self.one_hot_mapping)
+                y_val_labels = helper.one_hot_decode(y_val_pred, self.onehot_mapping)
                 
                 val_loss = cross_entropy(y_val_onehot, y_val_pred)
                 self.val_losses.append(val_loss)
@@ -112,7 +132,7 @@ class DNN:
             
     def predict(self, X_test):
         y_pred = self.f_propagation(X_test)
-        y_pred = helper.one_hot_decode(y_pred, self.one_hot_mapping)
+        y_pred = helper.one_hot_decode(y_pred, self.onehot_mapping)
         return y_pred
     
     def clip_grads(self, grads, max_norm=1.0):

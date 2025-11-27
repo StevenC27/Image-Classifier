@@ -9,6 +9,7 @@ class MLP:
         self.lr = lr
         self.epochs = epochs
         self.n_layers = len(layers)-1
+        self.grad_clipping = grad_clipping
         
         self.weights = []
         self.biases = []
@@ -53,20 +54,22 @@ class MLP:
                 dlc_prev = da_prev * activation.leaky_relu_derivative(self.l_combinations[i-1])
                 dlc = dlc_prev
         
-        dws = self.clip_grads(dws)
+        if self.grad_clipping:
+            dws = self.clip_grads(dws)
+            
         for i in range(self.n_layers):
             self.weights[i] -= self.lr * dws[i]
             self.biases[i] -= self.lr * dbs[i]        
     
-    def fit(self, X, y, X_val=None, y_val=None, batch_size=50):
-        X = X.astype(np.float32)
-        y_onehot, self.one_hot_mapping = helper.one_hot_encode(y)
+    def fit(self, X_train, y_train, X_val=None, y_val=None, batch_size=50):
+        X_train = X_train.astype(np.float32)
+        y_train_onehot, self.onehot_mapping = helper.one_hot_encode(y_train)
 
         if X_val is not None and y_val is not None:
             X_val = X_val.astype(np.float32)
-            y_val_onehot, y_val_map = helper.one_hot_encode(y_val)
+            y_val_onehot, _ = helper.one_hot_encode(y_val)
 
-        m = X.shape[0]
+        m = X_train.shape[0]
         self.train_losses = []
         self.train_accuracies = []
         self.val_losses = []
@@ -74,7 +77,7 @@ class MLP:
         
         for epoch in range(self.epochs):
             indices = np.random.permutation(m)
-            X_shuffled, y_shuffled = X[indices], y_onehot[indices]
+            X_shuffled, y_shuffled = X_train[indices], y_train_onehot[indices]
             
             batch_losses = []
 
@@ -93,14 +96,14 @@ class MLP:
             mean_train_loss = np.mean(batch_losses)
             self.train_losses.append(mean_train_loss)
             
-            y_train_pred = self.f_propagation(X)
-            y_train_labels = helper.one_hot_decode(y_train_pred, self.one_hot_mapping)
-            train_accuracy = accuracy_score(y, y_train_labels)
+            y_train_pred = self.f_propagation(X_train)
+            y_train_labels = helper.one_hot_decode(y_train_pred, self.onehot_mapping)
+            train_accuracy = accuracy_score(y_train, y_train_labels)
             self.train_accuracies.append(train_accuracy)
 
             if X_val is not None:
                 y_val_pred = self.f_propagation(X_val)
-                y_val_labels = helper.one_hot_decode(y_val_pred, self.one_hot_mapping)
+                y_val_labels = helper.one_hot_decode(y_val_pred, self.onehot_mapping)
                 
                 val_loss = cross_entropy(y_val_onehot, y_val_pred)
                 self.val_losses.append(val_loss)
@@ -112,7 +115,7 @@ class MLP:
         
     def predict(self, X):
         y_pred = self.f_propagation(X)
-        y_pred = helper.one_hot_decode(y_pred, self.one_hot_mapping)
+        y_pred = helper.one_hot_decode(y_pred, self.onehot_mapping)
         return y_pred
        
     def clip_grads(self, grads, max_norm=1.0):
