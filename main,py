@@ -1,8 +1,7 @@
 from mlp import MLP
 from dnn import DNN
 import helper
-from sklearn.metrics import accuracy_score, confusion_matrix, ConfusionMatrixDisplay
-import numpy as np
+from sklearn.metrics import accuracy_score
 import matplotlib.pyplot as plt
 
 class_labels = ["Bird", "Cat", "Deer", "Dog", "Horse"]
@@ -20,7 +19,7 @@ def mlp(X_train, y_train, X_test, y_test,
 
 # 768, 512, 384, 256, 192, 128, 96, 64, 48, 32, 
 def dnn(X_train, y_train, X_test, y_test,
-        layers=[3072, 768, 512, 384, 256, 192, 128, 96, 64, 48, 32, 5], epochs=50, batch_size=256, grad_clipping=True, dropout_rate=0.0):
+        layers=[3072, 768, 512, 384, 256, 192, 128, 96, 64, 48, 32, 5], epochs=20, batch_size=256, grad_clipping=True, dropout_rate=0.0):
     model = DNN(layers=layers, epochs=epochs, grad_clipping=grad_clipping, dropout_rate=dropout_rate)
     model.fit(X_train, y_train, X_test, y_test, batch_size=batch_size)
     y_pred = model.predict(X_test)
@@ -31,8 +30,8 @@ def dnn(X_train, y_train, X_test, y_test,
 
 X_train, y_train, X_test, y_test = helper.get_test_train()
 
-mlp(X_train, y_train, X_test, y_test, epochs=100, batch_size=256, grad_clipping=True)
+#mlp(X_train, y_train, X_test, y_test, epochs=100, batch_size=256, grad_clipping=True)
 #mlp(X_train, y_train, X_test, y_test, epochs=20, batch_size=256, grad_clipping=True)
 
-#dnn(X_train, y_train, X_test, y_test, epochs=200, batch_size=256, grad_clipping=True, dropout_rate=0.0)
+dnn(X_train, y_train, X_test, y_test, epochs=2, batch_size=256, grad_clipping=True, dropout_rate=0.0)
 plt.show()

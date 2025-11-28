@@ -13,7 +13,6 @@ def unpickle_train():
             dict = pickle.load(fo, encoding='bytes')
             
         y_i = np.array(dict[b'labels'])
-        print(y_i)
         X_i = np.array(dict[b'data'])
         
         class_indices = np.where((y_i == 2) | (y_i == 3) | (y_i == 4) | (y_i == 5) | (y_i == 7))
@@ -86,5 +85,5 @@ def plot_loss_accuracy(train_losses, val_losses, train_accuracy, val_accuracy):
 def plot_cm(class_labels, y_true, y_pred):
     cm = confusion_matrix(y_true, y_pred)
     cm_plot = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=class_labels)
-    cm_plot.plot()
+    cm_plot.plot(cmap="Reds")
     
