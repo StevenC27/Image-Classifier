@@ -5,7 +5,7 @@ import helper
 from sklearn.metrics import accuracy_score
 
 class MLP:
-    def __init__(self, epochs, layers=[3072, 512, 256, 128, 64, 5], lr=0.005, grad_clipping=True):
+    def __init__(self, epochs, layers=[3072, 1024, 512, 256, 128, 5], lr=0.005, grad_clipping=True):
         self.lr = lr
         self.epochs = epochs
         self.n_layers = len(layers)-1

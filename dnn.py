@@ -5,12 +5,14 @@ import helper
 from sklearn.metrics import accuracy_score
 
 class DNN:
-    def __init__(self, epochs, layers=[3072, 512, 256, 128, 64, 5], lr=0.02, grad_clipping=True, dropout_rate=0.0):
+    def __init__(self, epochs, layers=[3072, 512, 256, 128, 64, 5], lr=0.02, grad_clipping=True, dropout_rate=0.0, val_patience=20, use_augmenting=True):
         self.lr = lr
         self.epochs = epochs
         self.n_layers = len(layers)-1
         self.grad_clipping = grad_clipping
         self.dropout_rate = dropout_rate
+        self.val_patience = val_patience
+        self.use_augmenting = use_augmenting
         
         self.weights = []
         self.biases = []
@@ -92,6 +94,9 @@ class DNN:
         self.val_losses = []
         self.val_accuracies = []
         
+        best_val_loss = np.inf
+        val_patience_count = 0
+
         for epoch in range(self.epochs):
             indices = np.random.permutation(m)
             X_shuffled, y_shuffled = X_train[indices], y_train_onehot[indices]
@@ -102,13 +107,21 @@ class DNN:
                 end = start + batch_size
                 X_batch = X_shuffled[start:end]
                 y_batch = y_shuffled[start:end]
-                
+
+                if self.use_augmenting:
+                    X_batch_aug = []
+                    for img in X_batch:
+                        img = self.data_augment(img)
+                        X_batch_aug.append(img)
+
+                    X_batch = np.array(X_batch_aug, dtype=np.float32)                
+
                 y_train_pred = self.f_propagation(X_batch)
-                
+                self.b_propagation(X_batch, y_batch)
                 batch_loss = cross_entropy(y_batch, y_train_pred)
                 batch_losses.append(batch_loss)
                 
-                self.b_propagation(X_batch, y_batch)
+                
                 
             mean_train_loss = np.mean(batch_losses)
             self.train_losses.append(mean_train_loss)
@@ -129,6 +142,20 @@ class DNN:
                 self.val_accuracies.append(val_accuracy)
                 
                 print(f"iter {epoch}: train_loss = {batch_loss:.4f}, val_loss = {val_loss:.4f}, train_acc = {train_accuracy:.4f}, val_acc = {val_accuracy:.4f}")
+
+                if val_loss < best_val_loss:
+                    best_val_loss = val_loss
+                    val_patience_count = 0
+                    best_w = [w.copy() for w in self.weights]
+                    best_b = [b.copy() for b in self.biases]
+                else:
+                    val_patience_count += 1
+
+                if val_patience_count >= self.val_patience:
+                    print(f"Early stopping triggered.")
+                    self.weights = best_w
+                    self.biases = best_b
+                    break
             
     def predict(self, X_test):
         y_pred = self.f_propagation(X_test)
@@ -146,4 +173,30 @@ class DNN:
             for grad in grads:
                 grad *= scale
         return grads
-        
+
+    def data_augment(self, flat_img):
+        img = flat_img.reshape(32, 32, 3) * 255
+
+        if np.random.rand() < 0.25:
+            # horizontal flip
+            img = img[:, ::-1, :]
+
+        if np.random.rand() < 0.25:
+            # vertical flip
+            img = img[::-1, :, :]
+
+        pad = 3
+        padded = np.pad(img, ((pad, pad) ,(pad, pad), (0, 0)), mode='reflect')
+        x = np.random.randint(0, 2 * pad)
+        y = np.random.randint(0, 2 * pad)
+        img = padded[x:x+32, y:y+32]
+
+        brightness = 1.0 + np.random.uniform(-0.1, 0.1)
+        img *= brightness
+
+        noise = np.random.normal(0, 5, img.shape)
+        img += noise
+
+        flat_img = img.reshape(-1) / 255
+        return flat_img
+    
