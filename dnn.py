@@ -7,15 +7,17 @@ from sklearn.metrics import accuracy_score
 np.random.seed(42)
 
 class DNN:
-    def __init__(self, epochs, layers=[3072, 512, 256, 128, 64, 5], lr=0.02, grad_clipping=True, dropout_rate=0.0, val_patience=20, use_augmenting=True, use_bn=True):
+    def __init__(self, epochs, layers=[3072, 512, 256, 128, 64, 5], lr=0.005, grad_clipping=True, dropout_rate=0.0, dropout_layers=None, val_patience=10, use_augmenting=True, use_bn=True, weight_decay=0.0):
         self.lr = lr
         self.epochs = epochs
         self.n_layers = len(layers)-1
         self.grad_clipping = grad_clipping
         self.dropout_rate = dropout_rate
+        self.dropout_layers = dropout_layers
         self.val_patience = val_patience
         self.use_augmenting = use_augmenting
         self.use_bn = use_bn
+        self.weight_decay = weight_decay
         
         self.weights = []
         self.biases = []
@@ -33,13 +35,10 @@ class DNN:
             self.biases.append(b)
             
             if self.use_bn and i < self.n_layers-1:
-                gamma = np.ones((1, layers[i+1]))
-                beta = np.zeros((1, layers[i+1]))
-                
-                self.gamma.append(gamma)
-                self.beta.append(beta)
-                self.running_means.append(beta)
-                self.running_vars.append(gamma)
+                self.gamma.append(np.ones((1, layers[i+1])))
+                self.beta.append(np.zeros((1, layers[i+1])))
+                self.running_means.append(np.zeros((1, layers[i+1])))
+                self.running_vars.append(np.ones((1, layers[i+1])))
                 
     
     def init_weights(self, input_size, output_size):
@@ -50,7 +49,8 @@ class DNN:
         self.l_combinations = []
         self.activations = [X]
         self.dropout_masks = []
-        self.bn_cache = [None] * (self.n_layers-1)
+        self.bn_cache = [None] * self.n_layers
+        self.bn_out = []
         for i in range(self.n_layers-1):
             lc = np.dot(self.activations[i], self.weights[i]) + self.biases[i]
             self.l_combinations.append(lc)
@@ -65,17 +65,20 @@ class DNN:
                     training)
                 
                 self.bn_cache[i] = cache
-                lc = bn_out
+                lc_bn = bn_out
+            else:
+                lc_bn = lc
             
-            a = activation.leaky_relu(lc)
+            self.bn_out.append(lc_bn)
+            a = activation.leaky_relu(lc_bn)
 
-            if training and self.dropout_rate > 0.0:
+            if training and self.dropout_rate > 0.0 and i in self.dropout_layers:
                 mask = (np.random.rand(*a.shape) > self.dropout_rate).astype(np.float32)
                 a *= mask
                 a /= (1 - self.dropout_rate)
                 self.dropout_masks.append(mask)
             else:
-                self.dropout_masks.append(np.ones_like)
+                self.dropout_masks.append(np.ones_like(a))
 
             self.activations.append(a)
 
@@ -99,27 +102,33 @@ class DNN:
             if i != 0:
                 da_prev = np.dot(dlc, self.weights[i].T)
 
-                if self.dropout_rate > 0.0:
+                if self.dropout_rate > 0.0 and i-1 in self.dropout_layers:
                     da_prev *= self.dropout_masks[i-1]
                     da_prev /= (1 - self.dropout_rate)
 
-                da = da_prev * activation.leaky_relu_derivative(self.l_combinations[i-1])
+                if self.use_bn:
+                    act_input = self.bn_out[i-1]
+                else:
+                    act_input = self.l_combinations[i-1]
 
-                if self.use_bn and i - 1 < self.n_layers - 1:
-                    d_bn, dgamma, dbeta = self.backward_bn(da, self.bn_cache[i-1])
-                    
+                dlc_prev = da_prev * activation.leaky_relu_derivative(act_input)
+
+                if self.use_bn and self.bn_cache[i-1] is not None:
+                    dlc, dgamma, dbeta = self.backward_bn(dlc_prev, self.bn_cache[i-1])
                     self.gamma[i-1] -= self.lr * dgamma
                     self.beta[i-1] -= self.lr * dbeta
-                    
-                    dlc = d_bn
                 else:
-                    dlc = da
+                    dlc = dlc_prev
                 
         if self.grad_clipping:
             dws = self.clip_grads(dws)
 
         for i in range(self.n_layers):
-            self.weights[i] -= self.lr * dws[i]
+            if self.weight_decay > 0:
+                self.weights[i] -= self.lr * (dws[i] + self.weight_decay * self.weights[i])
+            else:
+                self.weights[i] -= self.lr * dws[i]
+                
             self.biases[i] -= self.lr * dbs[i]
     
     def fit(self, X_train, y_train, X_val=None, y_val=None, batch_size=50):
@@ -242,35 +251,35 @@ class DNN:
         flat_img = img.reshape(-1) / 255
         return flat_img
     
-    def forward_bn(self, x, gamma, beta, running_mean, running_var, training, momentum=0.9, eps=1e-5):
+    def forward_bn(self, lc, gamma, beta, running_mean, running_var, training, momentum=0.9, eps=1e-5):
         if training:
-            batch_mean = np.mean(x, axis=0, keepdims=True)
-            batch_var = np.var(x, axis=0, keepdims=True)
+            batch_mean = np.mean(lc, axis=0, keepdims=True)
+            batch_var = np.var(lc, axis=0, keepdims=True)
             
-            x_hat = (x - batch_mean) / np.sqrt(batch_var + eps)
-            out = gamma * x_hat + beta
+            lc_hat = (lc - batch_mean) / np.sqrt(batch_var + eps)
+            out = gamma * lc_hat + beta
             
             running_mean[:] = momentum * running_mean + (1 - momentum) * batch_mean
             running_var[:] = momentum * running_var + (1 - momentum) * batch_var
             
-            cache = (x, x_hat, batch_mean, batch_var, gamma, eps)
+            cache = (lc, lc_hat, batch_mean, batch_var, gamma, eps)
             return out, cache
         else:
-            x_hat = (x - running_mean) / np.sqrt(running_var + eps)
-            out = gamma * x_hat + beta
+            lc_hat = (lc - running_mean) / np.sqrt(running_var + eps)
+            out = gamma * lc_hat + beta
             return out, None
         
     def backward_bn(self, dout, cache):
-        x, x_hat, mean, var, gamma, eps = cache
-        m = x.shape[0]
+        lc, lc_hat, mean, var, gamma, eps = cache
+        m = lc.shape[0]
         
-        dgamma = np.sum(dout * x_hat, axis=0, keepdims=True)
+        dgamma = np.sum(dout * lc_hat, axis=0, keepdims=True)
         dbeta = np.sum(dout, axis=0, keepdims=True)
         
-        dx_hat = dout * gamma
-        dvar = np.sum(dx_hat * (x - mean) * -0.5 * (var + eps)**(-3/2), axis=0, keepdims=True)
-        dmean = np.sum(dx_hat * -1 / np.sqrt(var + eps), axis=0, keepdims=True) + dvar * np.mean(-2 * (x - mean), axis=0, keepdims=True)
+        dlc_hat = dout * gamma
+        dvar = np.sum(dlc_hat * (lc - mean) * -0.5 * (var + eps)**(-1.5), axis=0, keepdims=True)
+        dmean = np.sum(dlc_hat * -1 / np.sqrt(var + eps), axis=0, keepdims=True) + dvar * np.mean(-2 * (lc - mean), axis=0, keepdims=True)
         
-        dx = dx_hat / np.sqrt(var + eps) + dvar * 2 * (x - mean) / m + dmean / m
-        return dx, dgamma, dbeta
+        dlc = dlc_hat / np.sqrt(var + eps) + dvar * 2 * (lc - mean) / m + dmean / m
+        return dlc, dgamma, dbeta
     
