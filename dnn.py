@@ -7,17 +7,15 @@ from sklearn.metrics import accuracy_score
 np.random.seed(42)
 
 class DNN:
-    def __init__(self, epochs, layers=[3072, 512, 256, 128, 64, 5], lr=0.005, grad_clipping=True, dropout_rate=0.0, dropout_layers=None, val_patience=10, use_augmenting=True, use_bn=True, weight_decay=0.0):
+    def __init__(self, epochs, layers, lr=0.005, grad_clipping=True, dropout_rate=0.0, dropout_layers=None, use_augmenting=True, use_bn=True):
         self.lr = lr
         self.epochs = epochs
         self.n_layers = len(layers)-1
         self.grad_clipping = grad_clipping
         self.dropout_rate = dropout_rate
         self.dropout_layers = dropout_layers
-        self.val_patience = val_patience
         self.use_augmenting = use_augmenting
         self.use_bn = use_bn
-        self.weight_decay = weight_decay
         
         self.weights = []
         self.biases = []
@@ -124,11 +122,7 @@ class DNN:
             dws = self.clip_grads(dws)
 
         for i in range(self.n_layers):
-            if self.weight_decay > 0:
-                self.weights[i] -= self.lr * (dws[i] + self.weight_decay * self.weights[i])
-            else:
-                self.weights[i] -= self.lr * dws[i]
-                
+            self.weights[i] -= self.lr * dws[i]
             self.biases[i] -= self.lr * dbs[i]
     
     def fit(self, X_train, y_train, X_val=None, y_val=None, batch_size=50):
@@ -144,9 +138,6 @@ class DNN:
         self.train_accuracies = []
         self.val_losses = []
         self.val_accuracies = []
-        
-        best_val_loss = np.inf
-        val_patience_count = 0
 
         for epoch in range(self.epochs):
             indices = np.random.permutation(m)
@@ -172,8 +163,6 @@ class DNN:
                 batch_loss = cross_entropy(y_batch, y_train_pred)
                 batch_losses.append(batch_loss)
                 
-                
-                
             mean_train_loss = np.mean(batch_losses)
             self.train_losses.append(mean_train_loss)
             
@@ -192,21 +181,7 @@ class DNN:
                 val_accuracy = accuracy_score(y_val, y_val_labels)
                 self.val_accuracies.append(val_accuracy)
                 
-                print(f"iter {epoch}: train_loss = {batch_loss:.4f}, val_loss = {val_loss:.4f}, train_acc = {train_accuracy:.4f}, val_acc = {val_accuracy:.4f}")
-
-                if val_loss < best_val_loss:
-                    best_val_loss = val_loss
-                    val_patience_count = 0
-                    best_w = [w.copy() for w in self.weights]
-                    best_b = [b.copy() for b in self.biases]
-                else:
-                    val_patience_count += 1
-
-                if val_patience_count >= self.val_patience:
-                    print(f"Early stopping triggered.")
-                    self.weights = best_w
-                    self.biases = best_b
-                    break
+                print(f"Epoch {epoch+1}: train_loss = {batch_loss:.4f}, val_loss = {val_loss:.4f}, train_acc = {train_accuracy:.4f}, val_acc = {val_accuracy:.4f}")
             
     def predict(self, X_test):
         y_pred = self.f_propagation(X_test)
@@ -225,7 +200,7 @@ class DNN:
                 grad *= scale
         return grads
 
-    def data_augment(self, flat_img):
+    def data_augment(self, flat_img, pad=3):
         img = flat_img.reshape(32, 32, 3) * 255
 
         if np.random.rand() < 0.25:
@@ -236,7 +211,6 @@ class DNN:
             # vertical flip
             img = img[::-1, :, :]
 
-        pad = 3
         padded = np.pad(img, ((pad, pad) ,(pad, pad), (0, 0)), mode='reflect')
         x = np.random.randint(0, 2 * pad)
         y = np.random.randint(0, 2 * pad)

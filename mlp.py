@@ -4,8 +4,10 @@ from loss import cross_entropy
 import helper
 from sklearn.metrics import accuracy_score
 
+np.random.seed(42)
+
 class MLP:
-    def __init__(self, epochs, layers=[3072, 1024, 512, 256, 128, 5], lr=0.005, grad_clipping=True):
+    def __init__(self, epochs, layers, lr=0.005, grad_clipping=True):
         self.lr = lr
         self.epochs = epochs
         self.n_layers = len(layers)-1
@@ -111,7 +113,7 @@ class MLP:
                 val_accuracy = accuracy_score(y_val, y_val_labels)
                 self.val_accuracies.append(val_accuracy)
             
-                print(f"iter {epoch}: train_loss = {batch_loss:.4f}, val_loss = {val_loss:.4f}, train_acc = {train_accuracy:.4f}, val_acc = {val_accuracy:.4f}")
+                print(f"Epoch {epoch+1}: train_loss = {batch_loss:.4f}, val_loss = {val_loss:.4f}, train_acc = {train_accuracy:.4f}, val_acc = {val_accuracy:.4f}")
         
     def predict(self, X):
         y_pred = self.f_propagation(X)
