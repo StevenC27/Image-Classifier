@@ -30,10 +30,9 @@ def dnn(X_train, y_train, X_test, y_test,
 
 X_train, y_train, X_test, y_test = helper.get_test_train()
 #mlp(X_train, y_train, X_test, y_test, epochs=200, batch_size=256, grad_clipping=True)
-#mlp(X_train, y_train, X_test, y_test, epochs=20, batch_size=256, grad_clipping=True)
 
 #dnn(X_train, y_train, X_test, y_test, epochs=200, batch_size=256, grad_clipping=True, dropout_rate=0.0, lr=0.05, dropout_layers=(), use_augmenting=True, use_bn=True)
-#dnn(X_train, y_train, X_test, y_test, epochs=50, batch_size=256, grad_clipping=True, dropout_rate=0.2, lr=0.005, dropout_layers=(3, 5, 7), use_augmenting=False, use_bn=True)
-dnn(X_train, y_train, X_test, y_test, epochs=200, batch_size=256, grad_clipping=True, dropout_rate=0.2, lr=0.05, dropout_layers=(3, 5, 7), use_augmenting=True, use_bn=False)
+dnn(X_train, y_train, X_test, y_test, epochs=50, batch_size=256, grad_clipping=True, dropout_rate=0.2, lr=0.005, dropout_layers=(3, 5, 7), use_augmenting=False, use_bn=True)
+#dnn(X_train, y_train, X_test, y_test, epochs=200, batch_size=256, grad_clipping=True, dropout_rate=0.2, lr=0.05, dropout_layers=(3, 5, 7), use_augmenting=True, use_bn=False)
 #dnn(X_train, y_train, X_test, y_test, epochs=200, batch_size=256, grad_clipping=True, dropout_rate=0.2, lr=0.05,dropout_layers=(3, 5, 7), use_augmenting=True, use_bn=True)
 plt.show()
