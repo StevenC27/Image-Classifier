@@ -1,6 +1,6 @@
 import numpy as np
-import activation
-from loss import cross_entropy
+from activation import leaky_relu, leaky_relu_derivative, softmax
+from loss import cross_entropy, cross_entropy_derivative
 import helper
 from sklearn.metrics import accuracy_score
 
@@ -39,18 +39,18 @@ class MLP:
         for i in range(self.n_layers-1):
             lc = np.dot(self.activations[i], self.weights[i]) + self.biases[i] # calculates the linear combinations at layer i.
             self.l_combinations.append(lc) # appends lc into the list of linear combinations.
-            a = activation.leaky_relu(lc) # calculates the activations of the layer i using the leaky relu.
+            a = leaky_relu(lc) # calculates the activations of the layer i using the leaky relu.
             self.activations.append(a) # appends "a" into the list of activations.
             
         lc = np.dot(self.activations[-1], self.weights[-1]) + self.biases[-1] # calculates the linear combinations at the output layer.
-        a = activation.softmax(lc) # calculates the activations of the last layer using softmax which is the output.
+        a = softmax(lc) # calculates the activations of the last layer using softmax which is the output.
         self.l_combinations.append(lc) # appends "lc" into the list of linear combinations.
         self.activations.append(a) # appends "a" into the list of activations.
         return a # returns the output of forward propagation.
         
     def b_propagation(self, X, y):
         m = X.shape[0] # stores the number of images in X.
-        dlc = self.activations[-1] - y # calculates the gradient of the cross entropy loss and stores it in dlc.
+        dlc = cross_entropy_derivative(y, self.activations[-1]) # calculates the gradient of the cross entropy loss and stores it in dlc.
         dws = [None] * self.n_layers # creates an array for weight gradients of size n_layers with each element being initialised to None.
         dbs = [None] * self.n_layers # creates an array for bias gradients of size n_layers with each element being initialised to None.
         
@@ -63,15 +63,18 @@ class MLP:
             # checks if the layer is not the first layer.
             if i != 0:
                 da_prev = np.dot(dlc, self.weights[i].T) # calculates how much the previous layer's activations affect the current layer.
-                dlc_prev = da_prev * activation.leaky_relu_derivative(self.l_combinations[i-1]) # 
+                dlc_prev = da_prev * leaky_relu_derivative(self.l_combinations[i-1]) # 
                 dlc = dlc_prev
         
+        # checks if gradient clipping is active.
         if self.grad_clipping:
+            # clips the weights gradients.
             dws = self.clip_grads(dws)
             
+        # updates the weights and biases for each layer.
         for i in range(self.n_layers):
             self.weights[i] -= self.lr * dws[i]
-            self.biases[i] -= self.lr * dbs[i]        
+            self.biases[i] -= self.lr * dbs[i]       
     
     def fit(self, X_train, y_train, X_val=None, y_val=None, batch_size=50):
         X_train = X_train.astype(np.float32) # converts X_train to float32 type for faster, more consistent calculations.
@@ -133,16 +136,13 @@ class MLP:
         y_pred = self.f_propagation(X_test) # gets the predictions and stores in y_pred.
         y_pred = helper.one_hot_decode(y_pred, self.onehot_mapping) # applies one_hot_decoding, updating y_pred to 1s and 0s.
         return y_pred # return predictions.
-       
-    def clip_grads(self, grads, max_norm=1.0):
-        total_norm = 0
-        for grad in grads:
-            total_norm += np.sum(np.square(grad))
-        total_norm = np.sqrt(total_norm)
-        
-        if total_norm > max_norm:
-            scale = max_norm / (total_norm + 1e-6)
-            for grad in grads:
-                grad *= scale
-        return grads
     
+    def clip_grads(self, grads, max_norm=1.0):
+        total_norm = np.sqrt(sum(np.sum(grad**2) for grad in grads)) # calculates the total norm.
+        
+        # checks if total_norm is larger than max_norm
+        if total_norm > max_norm:
+            scale = max_norm / (total_norm + 1e-6) # calculates scale for normalising.
+            grads = [grad * scale for grad in grads] # multiplies each gradient by the scale.
+        return grads # returns gradients.
+        

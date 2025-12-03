@@ -1,6 +1,6 @@
 import numpy as np
-import activation
-from loss import cross_entropy
+from activation import leaky_relu, leaky_relu_derivative, softmax
+from loss import cross_entropy, cross_entropy_derivative
 import helper
 from sklearn.metrics import accuracy_score
 
@@ -52,9 +52,9 @@ class DNN:
     def f_propagation(self, X, training=True):
         self.l_combinations = [] # initialises l_combinations to an empty list.
         self.activations = [X] # initialises activations to a list with the first elements being X.
-        self.dropout_masks = []
-        self.bn_cache = [None] * self.n_layers
-        self.bn_out = []
+        self.dropout_masks = [] # initialises dropout_masks to an empty list.
+        self.bn_cache = [] # initialises bn_cache to an empty list.
+        self.bn_out = [] # initialises bn_out to an empty list.
 
         # loops through the layers bar the last layer.
         for i in range(self.n_layers-1):
@@ -66,13 +66,13 @@ class DNN:
                 # gets and stores bn_out and cache
                 bn_out, cache = self.forward_bn(lc, self.gamma[i], self.beta[i], self.running_means[i], self.running_vars[i], training)
                 
-                self.bn_cache[i] = cache # sets the cache of each later.
+                self.bn_cache.append(cache) # appends cache into bn_cache list.
                 lc_bn = bn_out # sets batch norm linear combinations to bn_out.
             else:
                 lc_bn = lc # sets batch norm linear combinations to lc.
             
             self.bn_out.append(lc_bn) # appends lc_bn to bn_out.
-            a = activation.leaky_relu(lc_bn) # calculates the activations of the layer i using the leaky relu.
+            a = leaky_relu(lc_bn) # calculates the activations of the layer i using the leaky relu.
 
             # checks if training is true and dropout is active.
             if training and self.dropout_rate > 0.0 and i in self.dropout_layers:
@@ -87,15 +87,15 @@ class DNN:
             self.activations.append(a) # appends activation to activations.
 
         lc = np.dot(self.activations[-1], self.weights[-1]) + self.biases[-1] # calculates the linear combinations at the output layer.
-        a = activation.softmax(lc) # calculates the activations of the last layer using softmax which is the output.
+        a = softmax(lc) # calculates the activations of the last layer using softmax which is the output.
         self.l_combinations.append(lc) # appends "lc" into the list of linear combinations.
         self.activations.append(a) # appends "a" into the list of activations.
-        self.dropout_masks.append(np.ones_like(a))
+        self.dropout_masks.append(np.ones_like(a)) # appends ones with same dimensions as a into dropout_masks.
         return a # returns the output of forward propagation.
     
     def b_propagation(self, X, y):
         m = X.shape[0] # stores the number of images in X.
-        dlc = self.activations[-1] - y # calculates the gradient of the cross entropy loss and stores it in dlc.
+        dlc = cross_entropy_derivative(y, self.activations[-1]) # calculates the gradient of the cross entropy loss and stores it in dlc.
         dws = [None] * self.n_layers # creates an array for weight gradients of size n_layers with each element being initialised to None.
         dbs = [None] * self.n_layers # creates an array for bias gradients of size n_layers with each element being initialised to None.
         
@@ -122,7 +122,7 @@ class DNN:
                     # sets act_input to l_combinations[i-1]
                     act_input = self.l_combinations[i-1]
 
-                dlc_prev = da_prev * activation.leaky_relu_derivative(act_input) # calculates the error of the previous layer.
+                dlc_prev = da_prev * leaky_relu_derivative(act_input) # calculates the error of the previous layer.
 
                 # checks if batch norm is active and previous cache exists.
                 if self.use_bn and self.bn_cache[i-1] is not None:
@@ -172,13 +172,16 @@ class DNN:
                 X_batch = X_shuffled[batch_start : batch_start + batch_size] # stores a batch of X_shuffled from index batch_start to (batch_start + batch_size).
                 y_batch = y_shuffled[batch_start : batch_start + batch_size] # stores a batch of y_shuffled from index batch_start to (batch_start + batch_size).
 
+                # checks if data augmentation is active.
                 if self.use_augmenting:
-                    X_batch_aug = []
+                    X_batch_aug = [] # creates an empty list for storing augmented batch data.
+                    
+                    # loops through each image in the batch.
                     for img in X_batch:
-                        img = self.data_augment(img)
-                        X_batch_aug.append(img)
+                        img = self.data_augment(img) # applies data augmentation to the image.
+                        X_batch_aug.append(img) # appends the image into X_batch_aug.
 
-                    X_batch = np.array(X_batch_aug, dtype=np.float32)                
+                    X_batch = np.array(X_batch_aug, dtype=np.float32) # sets the training batch to the augmented training batch.               
 
                 y_train_pred = self.f_propagation(X_batch) # gets and stores the prediction of the training batch.
                 batch_loss = cross_entropy(y_batch, y_train_pred) # calculates and stores cross entropy loss for the batch.
@@ -213,16 +216,13 @@ class DNN:
         return y_pred # return predictions.
     
     def clip_grads(self, grads, max_norm=1.0):
-        total_norm = 0
-        for grad in grads:
-            total_norm += np.sum(np.square(grad))
-        total_norm = np.sqrt(total_norm)
+        total_norm = np.sqrt(sum(np.sum(grad**2) for grad in grads)) # calculates the total norm.
         
+        # checks if total_norm is larger than max_norm
         if total_norm > max_norm:
-            scale = max_norm / (total_norm + 1e-6)
-            for grad in grads:
-                grad *= scale
-        return grads
+            scale = max_norm / (total_norm + 1e-6) # calculates scale for normalising.
+            grads = [grad * scale for grad in grads] # multiplies each gradient by the scale.
+        return grads # returns gradients.
 
     def data_augment(self, flat_img, pad=3):
         img = flat_img.reshape(32, 32, 3) * 255 # reshapes the flattened images into their original shape and unnormalises data.
@@ -250,34 +250,37 @@ class DNN:
         return flat_img # returns flat_img.
     
     def forward_bn(self, lc, gamma, beta, running_mean, running_var, training, momentum=0.9, eps=1e-5):
+        # checks if training is true.
         if training:
+            # calculates batch_mean and batch_var
             batch_mean = np.mean(lc, axis=0, keepdims=True)
             batch_var = np.var(lc, axis=0, keepdims=True)
             
-            lc_hat = (lc - batch_mean) / np.sqrt(batch_var + eps)
-            out = gamma * lc_hat + beta
+            lc_hat = (lc - batch_mean) / np.sqrt(batch_var + eps) # calculates the batch normalised linear combinations.
+            out = gamma * lc_hat + beta # calculates the final output of batch normalisation.
             
-            running_mean[:] = momentum * running_mean + (1 - momentum) * batch_mean
-            running_var[:] = momentum * running_var + (1 - momentum) * batch_var
+            running_mean[:] = momentum * running_mean + (1 - momentum) * batch_mean # updates the running mean.
+            running_var[:] = momentum * running_var + (1 - momentum) * batch_var # updates the running varience.
             
-            cache = (lc, lc_hat, batch_mean, batch_var, gamma, eps)
-            return out, cache
+            cache = (lc, lc_hat, batch_mean, batch_var, gamma, eps) # stores all useful info in a cache for backward batch norm.
+            return out, cache # returns the output and the cache.
         else:
-            lc_hat = (lc - running_mean) / np.sqrt(running_var + eps)
-            out = gamma * lc_hat + beta
-            return out, None
+            # if not training then a prediction is being made.
+            lc_hat = (lc - running_mean) / np.sqrt(running_var + eps) # calculates the batch normalised linear combinations with the running mean and var.
+            out = gamma * lc_hat + beta # calculates the final output of batch normalisation.
+            return out, None # returns only the output.
         
     def backward_bn(self, dout, cache):
-        lc, lc_hat, mean, var, gamma, eps = cache
-        m = lc.shape[0]
+        lc, lc_hat, mean, var, gamma, eps = cache # unpacks the cache.
+        m = lc.shape[0] # gets and stores the number of samples.
         
-        dgamma = np.sum(dout * lc_hat, axis=0, keepdims=True)
-        dbeta = np.sum(dout, axis=0, keepdims=True)
+        dgamma = np.sum(dout * lc_hat, axis=0, keepdims=True) # calculates gradient of gamma.
+        dbeta = np.sum(dout, axis=0, keepdims=True) # calculates gradient of beta.
         
-        dlc_hat = dout * gamma
-        dvar = np.sum(dlc_hat * (lc - mean) * -0.5 * (var + eps)**(-1.5), axis=0, keepdims=True)
-        dmean = np.sum(dlc_hat * -1 / np.sqrt(var + eps), axis=0, keepdims=True) + dvar * np.mean(-2 * (lc - mean), axis=0, keepdims=True)
+        dlc_hat = dout * gamma # calculates gradient of lc_hat.
+        dvar = np.sum(dlc_hat * (lc - mean) * -0.5 * (var + eps)**(-1.5), axis=0, keepdims=True) # calculates the gradient of the batch var.
+        dmean = np.sum(dlc_hat * -1 / np.sqrt(var + eps), axis=0, keepdims=True) + dvar * np.mean(-2 * (lc - mean), axis=0, keepdims=True) # calculates the gradient of the batch mean.
         
-        dlc = dlc_hat / np.sqrt(var + eps) + dvar * 2 * (lc - mean) / m + dmean / m
-        return dlc, dgamma, dbeta
+        dlc = dlc_hat / np.sqrt(var + eps) + dvar * 2 * (lc - mean) / m + dmean / m # calculates the gradient of the linear combinations.
+        return dlc, dgamma, dbeta # returns dlc, dgamma and dbeta.
     
