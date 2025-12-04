@@ -1,16 +1,16 @@
 import pickle
 import numpy as np
 import matplotlib.pyplot as plt
-from sklearn.metrics import accuracy_score, confusion_matrix, ConfusionMatrixDisplay
+from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 
 def unpickle(file):
-    # opens file and stores data in dict.
+    # opens file and stores data in data.
     with open(file, 'rb') as fo:
-        dict = pickle.load(fo, encoding='bytes')
+        data = pickle.load(fo, encoding='bytes')
         
     # stores X and y data using data and lables.
-    X = np.array(dict[b'data'])
-    y = np.array(dict[b'labels'])
+    X = np.array(data[b'data'])
+    y = np.array(data[b'labels'])
     
     class_indices = np.where((y == 2) | (y == 3) | (y == 4) | (y == 5) | (y == 7)) # gets the indices where y is 2, 3, 4, 5 or 7.
     

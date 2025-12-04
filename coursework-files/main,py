@@ -1,0 +1,27 @@
+from mlp import MLP
+from dnn import DNN
+import helper
+import matplotlib.pyplot as plt
+
+class_labels = ["Bird", "Cat", "Deer", "Dog", "Horse"]
+X_train, y_train, X_test, y_test = helper.get_train_test()
+
+
+# runs the mlp model.
+model = MLP(epochs=150, layers=(3072, 1024, 512, 256, 128, 5), lr=0.01)
+
+# runs the dnn model.
+#model = DNN(epochs=150, layers=(3072, 1024, 768, 512, 384, 256, 192, 128, 96, 64, 48, 5), dropout_rate=0.2, lr=0.075, dropout_layers=(3, 5, 7), use_augmenting=True, use_bn=True)
+
+
+# runs the ablation study dnn models.
+"""
+model = DNN(epochs=150, layers=(3072, 1024, 768, 512, 384, 256, 192, 128, 96, 64, 48, 5), dropout_rate=0.0, lr=0.075, dropout_layers=(), use_augmenting=True, use_bn=True)
+model = DNN(epochs=50, layers=(3072, 1024, 768, 512, 384, 256, 192, 128, 96, 64, 48, 5), dropout_rate=0.2, lr=0.005, dropout_layers=(3, 5, 7), use_augmenting=False, use_bn=True)
+model = DNN(epochs=150, layers=(3072, 1024, 768, 512, 384, 256, 192, 128, 96, 64, 48, 5), dropout_rate=0.2, lr=0.075, dropout_layers=(3, 5, 7), use_augmenting=True, use_bn=False)
+"""
+model.fit(X_train, y_train, X_val=X_test, y_val=y_test, batch_size=256)
+y_pred = model.predict(X_test)
+helper.plot_loss_accuracy(model.train_losses, model.val_losses, model.train_accuracies, model.val_accuracies)
+helper.plot_cm(class_labels, y_test, y_pred)
+plt.show()

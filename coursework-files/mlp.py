@@ -130,7 +130,7 @@ class MLP:
                 self.val_accuracies.append(val_accuracy) # appends val_accuracy into val_accuracies list.
             
                 # prints the current epoch, train_loss, val_loss, train_accuracy, val_accuracy.
-                print(f"Epoch {epoch+1}: train_loss = {batch_loss:.4f}, val_loss = {val_loss:.4f}, train_acc = {train_accuracy:.4f}, val_acc = {val_accuracy:.4f}")
+                print(f"Epoch {epoch+1}: train_loss = {mean_train_loss:.4f}, val_loss = {val_loss:.4f}, train_acc = {train_accuracy:.4f}, val_acc = {val_accuracy:.4f}")
         
     def predict(self, X_test):
         y_pred = self.f_propagation(X_test) # gets the predictions and stores in y_pred.
